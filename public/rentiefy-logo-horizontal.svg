@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 70" fill="none">
+  <!-- Icon scaled -->
+  <g transform="translate(0, 5) scale(0.12)">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M250 40 L430 150 V250 C430 325 375 370 300 370 H280 L380 460 H305 L220 370 H195 V460 H130 V210 L250 115 Z M195 175 L250 135 L355 185 V250 C355 295 330 315 295 315 H195 V175 Z" fill="#2563EB"/>
+    <path d="M250 40 L445 160 L415 190 L250 85 L85 190 L55 160 Z" fill="#2563EB"/>
+    <rect x="222" y="195" width="22" height="22" rx="3" fill="#0F172A"/>
+    <rect x="252" y="195" width="22" height="22" rx="3" fill="#0F172A"/>
+    <rect x="222" y="225" width="22" height="22" rx="3" fill="#0F172A"/>
+    <rect x="252" y="225" width="22" height="22" rx="3" fill="#0F172A"/>
+    <path d="M165 290 C120 290 85 325 85 370 C85 425 165 475 165 475 C165 475 245 425 245 370 C245 325 210 290 165 290 Z" fill="#0D9488"/>
+    <circle cx="165" cy="365" r="24" fill="#FFFFFF"/>
+  </g>
+  <!-- Text Wordmark -->
+  <text x="70" y="38" font-family="Inter, system-ui, sans-serif" font-size="30" font-weight="800" fill="#0F172A" letter-spacing="-0.5">Rentiefy</text>
+  <!-- Tagline -->
+  <text x="70" y="54" font-family="Inter, system-ui, sans-serif" font-size="9" font-weight="700" fill="#64748B" letter-spacing="2.2">FIND. RENT. RELAX.</text>
+</svg>

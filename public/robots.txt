@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /auth
+Disallow: /messages
+Disallow: /saved
+Disallow: /api
+
+Sitemap: https://rentiefy.com/sitemap.xml

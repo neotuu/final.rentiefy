@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0d9488" />
+    <meta name="description" content="Find verified rental properties across India with Rentiefy. Browse flats, apartments, PGs, houses and commercial spaces." />
+    <link rel="canonical" href="https://rentiefy.com" />
+
+    <!-- iOS / Safari PWA support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Rentiefy" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+
+    <!-- Android Chrome -->
+    <meta name="application-name" content="Rentiefy" />
+    <meta name="msapplication-TileColor" content="#0d9488" />
+    <meta name="msapplication-tap-highlight" content="no" />
+
+    <!-- Safe area insets for notched phones -->
+    <style>
+      html { -webkit-tap-highlight-color: transparent; }
+      body { overscroll-behavior-y: none; }
+    </style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <title>Rentiefy | Find Rental Properties, Flats, Houses & PGs in India</title>
+
+    <!-- OpenGraph -->
+    <meta property="og:site_name" content="Rentiefy" />
+    <meta property="og:title" content="Rentiefy | Find Rental Properties, Flats, Houses & PGs in India" />
+    <meta property="og:description" content="Find verified rental properties across India with Rentiefy. Browse flats, apartments, PGs, houses and commercial spaces." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://rentiefy.com" />
+    <meta property="og:image" content="https://rentiefy.com/rentiefy-og-image.svg" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Rentiefy | Find Rental Properties, Flats, Houses & PGs in India" />
+    <meta name="twitter:description" content="Find verified rental properties across India with Rentiefy. Browse flats, apartments, PGs, houses and commercial spaces." />
+    <meta name="twitter:image" content="https://rentiefy.com/rentiefy-og-image.svg" />
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+    [
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Rentiefy",
+        "url": "https://rentiefy.com",
+        "description": "Find verified rental properties across India with Rentiefy. Browse flats, apartments, PGs, houses and commercial spaces.",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://rentiefy.com/browse?search={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Rentiefy",
+        "url": "https://rentiefy.com",
+        "logo": "https://rentiefy.com/logo.svg",
+        "email": "support@rentiefy.com",
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Indore",
+          "addressRegion": "Madhya Pradesh",
+          "addressCountry": "India"
+        }
+      }
+    ]
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "name": "Rentiefy",
+  "description": "Rentiefy - Broker-Free Property & PG Rental Platform in India",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

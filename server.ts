@@ -7,9 +7,24 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  // Security Headers Middleware
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    next();
+  });
 
-  // Initialize Gemini AI Client
+  // Limit JSON body payload size to prevent Denial-of-Service attacks
+  app.use(express.json({ limit: "500kb" }));
+
+  // Health Check Endpoint for Cloud Run / Load Balancer probes
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", service: "Rentiefy API", timestamp: new Date().toISOString() });
+  });
+
+  // Initialize Gemini AI Client safely
   const getAiClient = () => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -25,13 +40,13 @@ async function startServer() {
     });
   };
 
-  // Chatbot API Endpoint
+  // Secure Chatbot API Endpoint with Sanitization and Validation
   app.post("/api/chat", async (req, res) => {
     try {
-      const { messages, userContext } = req.body || {};
+      const { messages } = req.body || {};
       
       if (!Array.isArray(messages) || messages.length === 0) {
-        return res.status(400).json({ error: "Invalid messages format" });
+        return res.status(400).json({ error: "Invalid or empty messages payload" });
       }
 
       const apiKey = process.env.GEMINI_API_KEY;
@@ -39,6 +54,19 @@ async function startServer() {
         return res.status(500).json({ 
           error: "Gemini API Key is not configured on the server. Please check your environment variables." 
         });
+      }
+
+      // Sanitize and cap messages history (max 15 recent messages, max 2000 chars per message)
+      const sanitizedMessages = messages
+        .slice(-15)
+        .filter((m: any) => m && typeof m.content === "string" && m.content.trim().length > 0)
+        .map((m: any) => ({
+          role: m.role === "assistant" ? "Assistant" : "User",
+          content: String(m.content).trim().slice(0, 2000),
+        }));
+
+      if (sanitizedMessages.length === 0) {
+        return res.status(400).json({ error: "No valid message content provided" });
       }
 
       const ai = getAiClient();
@@ -69,9 +97,9 @@ Guidelines:
 - If the user speaks in Hindi or Hinglish (e.g. "Mujhe Indore me 1BHK chahiye" or "Flats kaise search kare?"), respond warmly in friendly Hindi or Hinglish! If they ask in English, respond in English.
 - Be practical, empathetic, and answer questions accurately. If you don't know something specific like a private phone number, guide them on how to unlock it safely through Rentiefy.`;
 
-      // Format conversation history into prompt
-      const formattedHistory = messages
-        .map((m: { role: string; content: string }) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+      // Format conversation history safely
+      const formattedHistory = sanitizedMessages
+        .map((m) => `${m.role}: ${m.content}`)
         .join("\n\n");
 
       const prompt = `Conversation history:\n${formattedHistory}\n\nPlease respond to the user's latest message with helpful, accurate advice.`;
@@ -93,7 +121,7 @@ Guidelines:
     } catch (err: any) {
       console.error("Error in /api/chat endpoint:", err);
       return res.status(500).json({ 
-        error: err?.message || "An error occurred while generating a response from Rentiefy AI." 
+        error: "An error occurred while generating a response from Rentiefy AI." 
       });
     }
   });
@@ -108,7 +136,7 @@ Guidelines:
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
@@ -119,3 +147,4 @@ Guidelines:
 }
 
 startServer();
+

@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import {
   Star, BadgeCheck, Crown, TrendingUp, Phone, Lock, CheckCircle2, Clock, X,
   Sparkles, Building2, Flame, Mail, MessageCircle, Video, Trash2, Power, AlertCircle, Pencil,
+  Calendar, MapPin, UserCheck, Check,
 } from 'lucide-react'
-import { getMyPayments, getMyListings, deleteListing, deactivateListing, reactivateListing } from '../lib/api'
+import { getMyPayments, getMyListings, deleteListing, deactivateListing, reactivateListing, getViewingSchedulesForUser, updateViewingScheduleStatus } from '../lib/api'
 import { PRICING_LABELS, PURPOSE_TRANSLATION_KEYS, MONETIZATION_FEATURES } from '../lib/constants'
-import type { Payment, PaymentPurpose, ListingWithDetails } from '../lib/types'
+import type { Payment, PaymentPurpose, ListingWithDetails, ViewingSchedule } from '../lib/types'
 import { useAuth } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
 import type { TranslationKey } from '../lib/language-types'
@@ -25,6 +26,7 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const [payments, setPayments] = useState<Payment[]>([])
   const [listings, setListings] = useState<ListingWithDetails[]>([])
+  const [schedules, setSchedules] = useState<ViewingSchedule[]>([])
   const [loading, setLoading] = useState(true)
   const [showPayment, setShowPayment] = useState(false)
   const [paymentPurpose, setPaymentPurpose] = useState<PaymentPurpose>('featured')
@@ -37,11 +39,26 @@ export default function DashboardPage() {
     if (!user) return
     setLoading(true)
     try {
-      const [pays, lists] = await Promise.all([getMyPayments(user.id), getMyListings(user.id)])
-      setPayments(pays); setListings(lists)
+      const [pays, lists, schs] = await Promise.all([
+        getMyPayments(user.id),
+        getMyListings(user.id),
+        getViewingSchedulesForUser(user.id),
+      ])
+      setPayments(pays)
+      setListings(lists)
+      setSchedules(schs)
     } catch { }
     setLoading(false)
   }, [user])
+
+  const handleUpdateSchedule = async (scheduleId: string, status: 'confirmed' | 'cancelled') => {
+    const res = await updateViewingScheduleStatus(scheduleId, status)
+    if (res.success) {
+      setSchedules((prev) =>
+        prev.map((s) => (s.id === scheduleId ? { ...s, status } : s))
+      )
+    }
+  }
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -116,6 +133,104 @@ export default function DashboardPage() {
               <DigiLockerVerification userId={user.id} />
             </div>
           )}
+
+          {/* Scheduled Property Visits Section */}
+          <div className="mt-6 card p-5">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-emerald-600" />
+                <h3 className="text-sm font-bold text-gray-900">Scheduled Property Visits</h3>
+              </div>
+              <span className="badge bg-emerald-100 text-emerald-800 text-xs font-semibold">
+                {schedules.length} {schedules.length === 1 ? 'Visit' : 'Visits'}
+              </span>
+            </div>
+
+            {schedules.length === 0 ? (
+              <div className="py-6 text-center">
+                <Calendar className="mx-auto h-8 w-8 text-gray-300" />
+                <p className="mt-2 text-xs font-medium text-gray-500">No scheduled visits yet.</p>
+                <p className="text-[11px] text-gray-400">Visit any listing page to schedule a property viewing with the landlord.</p>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-2.5">
+                {schedules.map((sch) => {
+                  const isLandlord = sch.owner_id === user?.id
+                  return (
+                    <div
+                      key={sch.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-gray-100 bg-slate-50/50 p-3.5 text-xs transition hover:border-emerald-200"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-900 text-sm">{sch.listing_title}</span>
+                          <span
+                            className={`badge capitalize text-[10px] ${
+                              sch.status === 'confirmed'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : sch.status === 'cancelled'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {sch.status}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-600">
+                          <span className="flex items-center gap-1 font-medium text-emerald-800">
+                            <Calendar className="h-3.5 w-3.5 text-emerald-600" />
+                            {new Date(sch.preferred_date).toLocaleDateString('en-IN', {
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}{' '}
+                            at {sch.preferred_time}
+                          </span>
+                          <span className="flex items-center gap-1 text-gray-500">
+                            <Phone className="h-3 w-3" />
+                            {isLandlord ? `Tenant: ${sch.user_name} (${sch.user_phone})` : `Phone: ${sch.user_phone}`}
+                          </span>
+                        </div>
+                        {sch.notes && (
+                          <p className="text-[11px] text-gray-500 italic bg-white p-1.5 rounded-md border border-gray-100">
+                            "{sch.notes}"
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => navigate(`/listing/${sch.listing_id}`)}
+                          className="btn-outline text-[11px] py-1 px-2.5"
+                        >
+                          View Listing
+                        </button>
+
+                        {isLandlord && sch.status === 'pending' && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleUpdateSchedule(sch.id, 'confirmed')}
+                              className="btn-primary text-[11px] py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1"
+                            >
+                              <Check className="h-3 w-3" /> Confirm
+                            </button>
+                            <button
+                              onClick={() => handleUpdateSchedule(sch.id, 'cancelled')}
+                              className="btn-ghost text-[11px] py-1 px-2 text-red-600 hover:bg-red-50"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
           {listings.length > 0 && (
             <div className="mt-6 card p-5">

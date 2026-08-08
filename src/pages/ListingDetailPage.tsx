@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { MapPin, BadgeCheck, Phone, Lock, ArrowLeft, CheckCircle2, ShieldCheck, Star, MessageCircle } from 'lucide-react'
+import { MapPin, BadgeCheck, Phone, Lock, ArrowLeft, CheckCircle2, ShieldCheck, Star, MessageCircle, Calendar, Clock, Sparkles } from 'lucide-react'
 import { useI18n } from '../lib/i18n'
 import Seo from '../components/Seo'
 import { useAuth } from '../lib/auth'
-import { getListingById, checkContactUnlocked, getOwnerPhone } from '../lib/api'
+import { getListingById, checkContactUnlocked, getOwnerPhone, getViewingSchedulesForUser } from '../lib/api'
 import { ROOM_TYPE_TRANSLATION_KEYS, GENDER_TRANSLATION_KEYS, CATEGORY_TRANSLATION_KEYS, PROPERTY_TYPE_TRANSLATION_KEYS, FURNISH_TRANSLATION_KEYS } from '../lib/constants'
 import UPIPaymentModal from '../components/UPIPaymentModal'
 import ReviewList from '../components/ReviewList'
-import type { ListingWithDetails } from '../lib/types'
+import ScheduleViewingModal from '../components/ScheduleViewingModal'
+import type { ListingWithDetails, ViewingSchedule } from '../lib/types'
 import type { TranslationKey } from '../lib/language-types'
 
 export default function ListingDetailPage() {
@@ -22,6 +23,8 @@ export default function ListingDetailPage() {
   const [unlocked, setUnlocked] = useState(false)
   const [ownerPhone, setOwnerPhone] = useState<string | null>(null)
   const [showPayment, setShowPayment] = useState(false)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [existingSchedules, setExistingSchedules] = useState<ViewingSchedule[]>([])
 
   useEffect(() => {
     if (!id) return
@@ -36,6 +39,9 @@ export default function ListingDetailPage() {
             if (isUnlocked && data.owner_id) {
               getOwnerPhone(data.owner_id).then(setOwnerPhone)
             }
+          })
+          getViewingSchedulesForUser(user.id).then((schedules) => {
+            setExistingSchedules(schedules.filter((s) => s.listing_id === data.id))
           })
         }
       })
@@ -159,42 +165,102 @@ export default function ListingDetailPage() {
 
         {/* Contact panel */}
         <div>
-          <div className="sticky top-20 card p-5">
-            <h3 className="text-sm font-semibold text-gray-900">{t('detail.contactOwner')}</h3>
-
-            {unlocked ? (
-              <div className="mt-3 space-y-3">
-                <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-700"><CheckCircle2 className="h-4 w-4 shrink-0" /> {t('detail.contactUnlocked')}</div>
-                <div className="rounded-xl border border-gray-100 px-4 py-3">
-                  <p className="text-xs text-gray-400">{t('detail.ownerPhone')}</p>
-                  <p className="mt-1 text-lg font-bold text-gray-900">{ownerPhone ?? '—'}</p>
+          <div className="sticky top-20 space-y-4">
+            
+            {/* Schedule Visit Prominent Card */}
+            <div className="card p-5 bg-gradient-to-br from-emerald-50/80 via-white to-brand-50/50 border-emerald-100/80 shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-2xs">
+                  <Calendar className="h-4 w-4" />
                 </div>
-                {ownerPhone && (
-                  <a href={`tel:${ownerPhone}`} className="btn-primary w-full"><Phone className="h-4 w-4" /> {t('detail.callNow')}</a>
-                )}
-              </div>
-            ) : (
-              <div className="mt-3 space-y-3">
-                <div className="rounded-xl bg-gray-50 px-4 py-3 text-center">
-                  <Lock className="mx-auto h-8 w-8 text-gray-300" />
-                  <p className="mt-2 text-xs text-gray-500">{t('detail.unlockContactDesc')}</p>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Property Visit</h3>
+                  <p className="text-[11px] text-gray-500">Book in-person viewing</p>
                 </div>
-                <button onClick={() => setShowPayment(true)} className="btn-primary w-full"><Lock className="h-4 w-4" /> {t('detail.payAndUnlock')}</button>
               </div>
-            )}
 
-            <div className="mt-4 space-y-2 border-t border-gray-100 pt-4">
-              {listing.owner_id && (
-                <button
-                  onClick={() => navigate(`/messages?listing=${listing.id}&owner=${listing.owner_id}`)}
-                  className="btn-ghost w-full"
-                >
-                  <MessageCircle className="h-4 w-4" /> Message Owner
-                </button>
+              {/* Show Existing Scheduled Visit if any */}
+              {existingSchedules.length > 0 ? (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between font-semibold text-emerald-900">
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="h-3.5 w-3.5 text-emerald-600" /> Scheduled Visit
+                    </span>
+                    <span className="badge bg-emerald-200 text-emerald-800 capitalize text-[10px]">
+                      {existingSchedules[0].status}
+                    </span>
+                  </div>
+                  <p className="text-gray-700 font-medium">
+                    {new Date(existingSchedules[0].preferred_date).toLocaleDateString('en-IN', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric'
+                    })} at {existingSchedules[0].preferred_time}
+                  </p>
+                  <p className="text-[11px] text-gray-500">
+                    Landlord has been notified via Rentiefy Inbox.
+                  </p>
+                  <button
+                    onClick={() => setShowScheduleModal(true)}
+                    className="mt-1 text-[11px] font-semibold text-emerald-700 hover:underline block"
+                  >
+                    + Schedule Another Slot
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-3">
+                  <p className="text-xs text-gray-600 mb-3">
+                    Choose your preferred date and time slot to visit this property. The landlord will be notified instantly.
+                  </p>
+                  <button
+                    onClick={() => setShowScheduleModal(true)}
+                    className="btn-primary w-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center gap-2 text-xs font-semibold shadow-xs"
+                  >
+                    <Calendar className="h-4 w-4" /> Schedule Property Viewing
+                  </button>
+                </div>
               )}
-              <div className="flex items-center gap-2 text-xs text-gray-500"><ShieldCheck className="h-3 w-3" /> {t('detail.listingNumber', { n: listing.entry_number })}</div>
-              <div className="flex items-center gap-2 text-xs text-gray-500"><Star className="h-3 w-3" /> {t('detail.trustScore')}: {listing.trust_score}/100</div>
             </div>
+
+            {/* Owner Contact details card */}
+            <div className="card p-5">
+              <h3 className="text-sm font-semibold text-gray-900">{t('detail.contactOwner')}</h3>
+
+              {unlocked ? (
+                <div className="mt-3 space-y-3">
+                  <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-700"><CheckCircle2 className="h-4 w-4 shrink-0" /> {t('detail.contactUnlocked')}</div>
+                  <div className="rounded-xl border border-gray-100 px-4 py-3">
+                    <p className="text-xs text-gray-400">{t('detail.ownerPhone')}</p>
+                    <p className="mt-1 text-lg font-bold text-gray-900">{ownerPhone ?? '—'}</p>
+                  </div>
+                  {ownerPhone && (
+                    <a href={`tel:${ownerPhone}`} className="btn-primary w-full"><Phone className="h-4 w-4" /> {t('detail.callNow')}</a>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-center">
+                    <Lock className="mx-auto h-8 w-8 text-gray-300" />
+                    <p className="mt-2 text-xs text-gray-500">{t('detail.unlockContactDesc')}</p>
+                  </div>
+                  <button onClick={() => setShowPayment(true)} className="btn-primary w-full"><Lock className="h-4 w-4" /> {t('detail.payAndUnlock')}</button>
+                </div>
+              )}
+
+              <div className="mt-4 space-y-2 border-t border-gray-100 pt-4">
+                {listing.owner_id && (
+                  <button
+                    onClick={() => navigate(`/messages?listing=${listing.id}&owner=${listing.owner_id}`)}
+                    className="btn-ghost w-full"
+                  >
+                    <MessageCircle className="h-4 w-4" /> Message Owner
+                  </button>
+                )}
+                <div className="flex items-center gap-2 text-xs text-gray-500"><ShieldCheck className="h-3 w-3" /> {t('detail.listingNumber', { n: listing.entry_number })}</div>
+                <div className="flex items-center gap-2 text-xs text-gray-500"><Star className="h-3 w-3" /> {t('detail.trustScore')}: {listing.trust_score}/100</div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -212,6 +278,16 @@ export default function ListingDetailPage() {
         }}
         onClose={() => setShowPayment(false)}
       />
+
+      <ScheduleViewingModal
+        isOpen={showScheduleModal}
+        listing={listing}
+        onClose={() => setShowScheduleModal(false)}
+        onSuccess={(newSch) => {
+          setExistingSchedules((prev) => [newSch, ...prev])
+        }}
+      />
     </div>
   )
 }
+

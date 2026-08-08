@@ -43,7 +43,7 @@ async function startServer() {
   // Secure Chatbot API Endpoint with Sanitization and Validation
   app.post("/api/chat", async (req, res) => {
     try {
-      const { messages } = req.body || {};
+      const { messages, location } = req.body || {};
       
       if (!Array.isArray(messages) || messages.length === 0) {
         return res.status(400).json({ error: "Invalid or empty messages payload" });
@@ -75,6 +75,8 @@ async function startServer() {
 
 Your goal is to guide tenants and property owners, answer all queries clearly, and make their home search or listing experience smooth and hassle-free.
 
+You have access to REAL-TIME GOOGLE MAPS GROUNDING data. Use real-time Google Maps information to give accurate, up-to-date details about cities, localities, tech parks, metro stations, hospitals, schools, restaurants, safety, and transportation in India.
+
 Key Rentiefy Features to highlight when relevant:
 1. **Zero Brokerage**: Connect tenants directly with verified property owners with zero broker fees.
 2. **Contact Unlock**: Reveal owner phone numbers for Rs. 10 via instant UPI payment or Razorpay.
@@ -88,6 +90,7 @@ Key Rentiefy Features to highlight when relevant:
 
 Guidelines:
 - Keep answers concise, highly scannable (using bullet points and bold text where helpful), polite, and encouraging.
+- When answering location-based or place questions, leverage Google Maps Grounding data to mention exact landmarks, metro connectivity, and nearby places.
 - When recommending platform tools or pages, mention actionable navigation routes or links:
   - Browse properties: /browse
   - Estimate rent: /rent-calculator
@@ -95,33 +98,151 @@ Guidelines:
   - List a property: /list-property
   - Contact human support: /contact
 - If the user speaks in Hindi or Hinglish (e.g. "Mujhe Indore me 1BHK chahiye" or "Flats kaise search kare?"), respond warmly in friendly Hindi or Hinglish! If they ask in English, respond in English.
-- Be practical, empathetic, and answer questions accurately. If you don't know something specific like a private phone number, guide them on how to unlock it safely through Rentiefy.`;
+- Be practical, empathetic, and answer questions accurately.`;
 
       // Format conversation history safely
       const formattedHistory = sanitizedMessages
         .map((m) => `${m.role}: ${m.content}`)
         .join("\n\n");
 
-      const prompt = `Conversation history:\n${formattedHistory}\n\nPlease respond to the user's latest message with helpful, accurate advice.`;
+      const prompt = `Conversation history:\n${formattedHistory}\n\nPlease respond to the user's latest message with helpful, accurate advice using Google Maps Grounding for place/locality context if requested.`;
+
+      const latLng = location && typeof location.latitude === "number" && typeof location.longitude === "number"
+        ? { latitude: location.latitude, longitude: location.longitude }
+        : undefined;
+
+      const config: any = {
+        systemInstruction,
+        temperature: 0.7,
+        tools: [{ googleMaps: {} }],
+      };
+
+      if (latLng) {
+        config.toolConfig = {
+          retrievalConfig: {
+            latLng,
+          },
+        };
+      }
 
       const response = await ai.models.generateContent({
         model: "gemini-3.6-flash",
         contents: prompt,
-        config: {
-          systemInstruction,
-          temperature: 0.7,
-        },
+        config,
       });
 
       const responseText = response.text || "I'm sorry, I couldn't process your request right now. Please try asking again!";
 
+      // Extract Google Maps grounding chunks as required by Maps Grounding Skill
+      const rawChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const groundingSources: { title: string; uri: string; reviewSnippets?: string[] }[] = [];
+
+      for (const chunk of rawChunks) {
+        if (chunk?.maps) {
+          const maps = chunk.maps;
+          const uri = maps.uri || maps.googleMapsUri || "";
+          const title = maps.title || maps.name || "Google Maps Location";
+          const reviewSnippets = Array.isArray(maps.placeAnswerSources?.reviewSnippets)
+            ? maps.placeAnswerSources.reviewSnippets.map((r: any) => typeof r === "string" ? r : r.text || r.snippet || "")
+            : [];
+          
+          if (uri && !groundingSources.some((s) => s.uri === uri)) {
+            groundingSources.push({ title, uri, reviewSnippets });
+          }
+        }
+      }
+
       return res.json({
         reply: responseText,
+        groundingSources,
       });
     } catch (err: any) {
       console.error("Error in /api/chat endpoint:", err);
       return res.status(500).json({ 
         error: "An error occurred while generating a response from Rentiefy AI." 
+      });
+    }
+  });
+
+  // Dedicated Google Maps Grounding Endpoint for Real-Time Locality & Neighborhood Info
+  app.post("/api/maps-grounding", async (req, res) => {
+    try {
+      const { query, city, locality, location } = req.body || {};
+      const userQuery = String(query || `${locality || "locality"} in ${city || "city"} India nearby metro stations tech parks hospitals rent`).trim();
+
+      if (!userQuery) {
+        return res.status(400).json({ error: "Missing query or locality parameter" });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "Gemini API Key is not configured on the server." });
+      }
+
+      const ai = getAiClient();
+
+      const systemInstruction = `You are Rentiefy's Real-Time Google Maps Grounding Service. Your job is to analyze localities, neighborhoods, and property areas across India using live Google Maps data.
+
+Provide comprehensive, real-time insights about:
+1. **Connectivity & Transit**: Nearby Metro Stations, Bus Stops, Railway Stations, Airport distance.
+2. **Key Landmarks & Employment Hubs**: Tech parks, business centers, colleges/universities.
+3. **Daily Conveniences**: Top hospitals, supermarkets, shopping malls, popular cafes & dining spots.
+4. **Livability & Safety**: Neighborhood vibe, family friendliness, night safety, and transit convenience.
+
+Format the response cleanly in readable Markdown with bold titles and bullet points.`;
+
+      const latLng = location && typeof location.latitude === "number" && typeof location.longitude === "number"
+        ? { latitude: location.latitude, longitude: location.longitude }
+        : undefined;
+
+      const config: any = {
+        systemInstruction,
+        temperature: 0.5,
+        tools: [{ googleMaps: {} }],
+      };
+
+      if (latLng) {
+        config.toolConfig = {
+          retrievalConfig: { latLng },
+        };
+      }
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: `Fetch real-time Google Maps information for: "${userQuery}"`,
+        config,
+      });
+
+      const responseText = response.text || "No detailed Google Maps information found for this query.";
+
+      const rawChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const groundingSources: { title: string; uri: string; reviewSnippets?: string[] }[] = [];
+
+      for (const chunk of rawChunks) {
+        if (chunk?.maps) {
+          const maps = chunk.maps;
+          const uri = maps.uri || maps.googleMapsUri || "";
+          const title = maps.title || maps.name || "Google Maps Location";
+          const reviewSnippets = Array.isArray(maps.placeAnswerSources?.reviewSnippets)
+            ? maps.placeAnswerSources.reviewSnippets.map((r: any) => typeof r === "string" ? r : r.text || r.snippet || "")
+            : [];
+          
+          if (uri && !groundingSources.some((s) => s.uri === uri)) {
+            groundingSources.push({ title, uri, reviewSnippets });
+          }
+        }
+      }
+
+      return res.json({
+        text: responseText,
+        groundingSources,
+        query: userQuery,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      console.error("Error in /api/maps-grounding endpoint:", err);
+      return res.status(500).json({
+        error: "Failed to fetch Google Maps Grounding data.",
       });
     }
   });

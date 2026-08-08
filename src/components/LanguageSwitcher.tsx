@@ -23,10 +23,10 @@ export default function LanguageSwitcher() {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 hover:border-gray-300 sm:px-3 sm:py-2 sm:text-sm"
+        className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-50 hover:border-gray-300 sm:px-2.5 sm:py-1.5 sm:text-xs"
         title="Change Language"
       >
-        <Globe className="h-4 w-4 text-brand-600" />
+        <Globe className="h-3.5 w-3.5 text-brand-600" />
         <span className="inline-block max-w-[80px] truncate sm:max-w-none">{current.nativeLabel}</span>
       </button>
       {open && (

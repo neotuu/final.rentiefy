@@ -5,7 +5,11 @@ import App from './App'
 import { AuthProvider } from './lib/auth'
 import { I18nProvider } from './lib/i18n'
 import ErrorBoundary from './components/ErrorBoundary'
+import { initSentry } from './lib/sentry'
 import './index.css'
+
+// Initialize Sentry error tracking
+initSentry()
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -26,3 +30,4 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>
 )
+

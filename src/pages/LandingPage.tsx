@@ -4,7 +4,7 @@ import {
   Home, Search, BadgeCheck, Users, MapPin, ShieldCheck, Wallet, ArrowRight, Building2,
   Heart, Star, Calculator, TrendingUp, Wifi, Bus, ShoppingCart, GraduationCap,
   Cross, TreePine, ChevronDown, Clock, MessageCircle, Zap, Award, PhoneCall,
-  Smartphone, FileText, HelpCircle, PawPrint, Sparkles, Download,
+  Smartphone, FileText, HelpCircle, PawPrint, Sparkles, Download, Mic,
 } from 'lucide-react'
 import { useI18n } from '../lib/i18n'
 import Seo from '../components/Seo'
@@ -14,6 +14,7 @@ import type { TranslationKey } from '../lib/language-types'
 import type { ListingWithDetails } from '../lib/types'
 import ListingCard from '../components/ListingCard'
 import Reveal from '../components/Reveal'
+import VoiceSearchButton from '../components/VoiceSearchButton'
 
 export default function LandingPage() {
   const { t } = useI18n()
@@ -114,9 +115,28 @@ export default function LandingPage() {
           {/* Search Box */}
           <div className="animate-scale-in mx-auto mt-8 max-w-4xl rounded-2xl bg-white p-4 shadow-xl sm:p-6">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input value={searchLoc} onChange={(e) => setSearchLoc(e.target.value.slice(0, 80))} className="input pl-9" placeholder={t('landing.searchLocationPh')} />
+              <div className="relative flex items-center">
+                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  value={searchLoc}
+                  onChange={(e) => setSearchLoc(e.target.value.slice(0, 80))}
+                  className="input pl-9 pr-10"
+                  placeholder={t('landing.searchLocationPh')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                />
+                <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                  <VoiceSearchButton
+                    onTranscript={(text) => setSearchLoc(text)}
+                    onSearchSubmit={(text) => {
+                      setSearchLoc(text)
+                      const params = new URLSearchParams()
+                      if (text) params.set('search', text)
+                      if (searchType !== 'all') params.set('type', searchType)
+                      if (searchBudget) params.set('budget', searchBudget)
+                      navigate(`/browse?${params.toString()}`)
+                    }}
+                  />
+                </div>
               </div>
               <select value={searchType} onChange={(e) => setSearchType(e.target.value)} className="input">
                 <option value="all">{t('landing.searchPropType')}</option>

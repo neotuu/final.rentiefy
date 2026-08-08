@@ -169,3 +169,23 @@ export interface PropertyReview {
   created_at: string
 }
 
+export type ViewingStatus = 'pending' | 'confirmed' | 'rescheduled' | 'cancelled'
+
+export interface ViewingSchedule {
+  id: string
+  listing_id: string
+  listing_title?: string
+  listing_address?: string
+  user_id: string
+  user_name: string
+  user_phone: string
+  user_email?: string
+  owner_id: string
+  owner_name?: string
+  preferred_date: string // YYYY-MM-DD
+  preferred_time: string // e.g. "10:30 AM" or "04:00 PM"
+  notes?: string
+  status: ViewingStatus
+  created_at: string
+}
+

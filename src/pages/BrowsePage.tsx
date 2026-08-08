@@ -1,12 +1,14 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, SlidersHorizontal, X, BadgeCheck, ChevronDown } from 'lucide-react'
+import { Search, SlidersHorizontal, X, BadgeCheck, ChevronDown, Mic, Zap } from 'lucide-react'
 import { useI18n } from '../lib/i18n'
 import Seo from '../components/Seo'
 import { getListings } from '../lib/api'
 import { CITIES, CITY_AREAS, ROOM_TYPE_TRANSLATION_KEYS, GENDER_TRANSLATION_KEYS, CATEGORY_TRANSLATION_KEYS, PROPERTY_TYPES, PROPERTY_TYPE_TRANSLATION_KEYS, FURNISH_TRANSLATION_KEYS } from '../lib/constants'
 import ListingCard from '../components/ListingCard'
 import { ListingGridSkeleton } from '../components/Skeletons'
+import VoiceSearchButton from '../components/VoiceSearchButton'
+import PropertyCompareModal from '../components/PropertyCompareModal'
 import type { ListingWithDetails } from '../lib/types'
 import type { TranslationKey } from '../lib/language-types'
 
@@ -34,6 +36,23 @@ export default function BrowsePage() {
   const [showFilters, setShowFilters] = useState(false)
   const [sort, setSort] = useState<SortOption>('newest')
   const [page, setPage] = useState(1)
+
+  // Property comparison state
+  const [comparedListings, setComparedListings] = useState<ListingWithDetails[]>([])
+  const [showCompareModal, setShowCompareModal] = useState(false)
+
+  const toggleCompare = (listing: ListingWithDetails) => {
+    setComparedListings((prev) => {
+      const exists = prev.some((item) => item.id === listing.id)
+      if (exists) {
+        return prev.filter((item) => item.id !== listing.id)
+      }
+      if (prev.length >= 3) {
+        return prev
+      }
+      return [...prev, listing]
+    })
+  }
 
   const availableAreas = city !== 'all' ? (CITY_AREAS[city] ?? []) : []
 
@@ -85,6 +104,50 @@ export default function BrowsePage() {
     setVerifiedOnly(false); setAvailableOnly(false)
   }
 
+  const handleVoiceSearch = (transcript: string) => {
+    setSearch(transcript)
+    const lower = transcript.toLowerCase()
+
+    // Smart parsing for city names
+    for (const c of CITIES) {
+      if (lower.includes(c.toLowerCase())) {
+        setCity(c)
+        break
+      }
+    }
+
+    // Smart parsing for property types
+    if (lower.includes('pg') || lower.includes('paying guest') || lower.includes('hostel')) {
+      setPropType('pg')
+    } else if (lower.includes('flat') || lower.includes('apartment') || lower.includes('bhk')) {
+      setPropType('apartment')
+    } else if (lower.includes('house') || lower.includes('villa') || lower.includes('independent')) {
+      setPropType('house')
+    } else if (lower.includes('room') || lower.includes('1rk') || lower.includes('single')) {
+      setPropType('room')
+    }
+
+    // Smart parsing for room types
+    if (lower.includes('1bhk') || lower.includes('1 bhk')) setRoomType('1bhk')
+    else if (lower.includes('2bhk') || lower.includes('2 bhk')) setRoomType('2bhk')
+    else if (lower.includes('3bhk') || lower.includes('3 bhk')) setRoomType('3bhk')
+    else if (lower.includes('single')) setRoomType('single')
+    else if (lower.includes('double') || lower.includes('shared')) setRoomType('double')
+
+    // Smart budget parsing (e.g. "under 15k", "below 20000")
+    const budgetMatch = lower.match(/(?:under|below|budget|max|around|rs|inr|\u20B9)?\s*(\d{1,2})k\b/)
+    if (budgetMatch) {
+      const numK = parseInt(budgetMatch[1], 10) * 1000
+      if (numK >= 2000 && numK <= MAX_BUDGET) setBudget(numK)
+    } else {
+      const numMatch = lower.match(/(?:under|below|budget|max|around|rs|inr|\u20B9)?\s*(\d{4,5})\b/)
+      if (numMatch) {
+        const num = parseInt(numMatch[1], 10)
+        if (num >= 2000 && num <= MAX_BUDGET) setBudget(num)
+      }
+    }
+  }
+
   const hasFilters = search || city !== 'all' || area !== 'all' || roomType !== 'all' || gender !== 'all' || category !== 'all' || propType !== 'all' || furnish !== 'all' || budget < MAX_BUDGET || verifiedOnly || availableOnly
 
   return (
@@ -101,9 +164,25 @@ export default function BrowsePage() {
       <h1 className="text-2xl font-bold text-gray-900">{t('browse.title')}</h1>
 
       <div className="mt-4 flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value.slice(0, 100))} maxLength={100} className="input pl-10" placeholder={t('browse.searchPlaceholder')} onKeyDown={(e) => e.key === 'Enter' && load()} />
+        <div className="relative flex-1 flex items-center">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value.slice(0, 100))}
+            maxLength={100}
+            className="input pl-10 pr-12"
+            placeholder={t('browse.searchPlaceholder')}
+            onKeyDown={(e) => e.key === 'Enter' && load()}
+          />
+          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+            <VoiceSearchButton
+              onTranscript={handleVoiceSearch}
+              onSearchSubmit={(final) => {
+                handleVoiceSearch(final)
+                load()
+              }}
+            />
+          </div>
         </div>
         <button onClick={() => setShowFilters(!showFilters)} className="btn-secondary"><SlidersHorizontal className="h-4 w-4" /> {t('common.filter')}</button>
       </div>
@@ -206,7 +285,16 @@ export default function BrowsePage() {
       ) : (
         <>
           <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {paged.map((l, idx) => <ListingCard key={l.id} listing={l} index={idx} />)}
+            {paged.map((l, idx) => (
+              <ListingCard
+                key={l.id}
+                listing={l}
+                index={idx}
+                isCompared={comparedListings.some((item) => item.id === l.id)}
+                onToggleCompare={toggleCompare}
+                compareDisabled={comparedListings.length >= 3}
+              />
+            ))}
           </div>
           {totalPages > 1 && (
             <div className="mt-8 flex items-center justify-center gap-2">
@@ -223,6 +311,67 @@ export default function BrowsePage() {
           )}
         </>
       )}
+
+      {/* Floating Property Comparison Bar */}
+      {comparedListings.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center justify-between gap-3 rounded-2xl bg-slate-900/90 text-white p-3 px-4 sm:px-5 shadow-2xl backdrop-blur-md border border-slate-700/60 max-w-xl w-[92%] animate-fade-in">
+          <div className="flex items-center gap-2 overflow-x-auto py-0.5 shrink">
+            {comparedListings.map((item) => (
+              <div key={item.id} className="relative group shrink-0">
+                <img
+                  src={item.media?.[0]?.media_url || 'https://images.pexels.com/photos/6585627/pexels-photo-6585627.jpeg'}
+                  alt={item.title}
+                  className="h-10 w-12 rounded-lg object-cover border border-slate-700"
+                />
+                <button
+                  onClick={() => toggleCompare(item)}
+                  className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition shadow-2xs"
+                  title="Remove from compare"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            {comparedListings.length < 3 && (
+              <div className="h-10 w-12 rounded-lg border border-dashed border-slate-600 flex items-center justify-center text-slate-500 text-xs shrink-0">
+                + Add
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-slate-300 hidden sm:inline font-medium">
+              {comparedListings.length}/3 selected
+            </span>
+            <button
+              onClick={() => setShowCompareModal(true)}
+              className="btn-primary bg-brand-500 hover:bg-brand-600 py-1.5 px-3.5 text-xs font-bold flex items-center gap-1.5 shadow-md border border-brand-400/30"
+            >
+              <Zap className="h-3.5 w-3.5" /> Compare Now
+            </button>
+            <button
+              onClick={() => setComparedListings([])}
+              className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+              title="Clear all selected"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Side-by-side Property Comparison Modal */}
+      <PropertyCompareModal
+        isOpen={showCompareModal}
+        listings={comparedListings}
+        onClose={() => setShowCompareModal(false)}
+        onRemoveListing={(id) => setComparedListings((prev) => prev.filter((item) => item.id !== id))}
+        onClearAll={() => {
+          setComparedListings([])
+          setShowCompareModal(false)
+        }}
+      />
     </div>
   )
 }
+

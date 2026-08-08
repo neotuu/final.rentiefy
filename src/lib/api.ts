@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { PRICING, UPI_ID } from './constants'
-import type { ListingWithDetails, Listing, Payment, Amenity, Owner, OwnerPhone, PaymentPurpose, FeatureType, Message, Conversation, PropertyReview, ReviewCategory } from './types'
+import type { ListingWithDetails, Listing, Payment, Amenity, Owner, OwnerPhone, PaymentPurpose, FeatureType, Message, Conversation, PropertyReview, ReviewCategory, ViewingSchedule, ViewingStatus } from './types'
 
 // ===== OTP =====
 
@@ -26,6 +26,24 @@ async function callEdgeFunction(slug: string, body: Record<string, unknown>): Pr
     throw new Error(msg)
   }
   return res.json()
+}
+
+export async function notifySavedPropertyUpdate(payload: {
+  listing_id: string
+  update_type: 'price_drop' | 'status_update'
+  old_price?: number
+  new_price?: number
+  old_status?: string
+  new_status?: string
+  listing_title?: string
+}): Promise<{ success: boolean; notified_users?: number; error?: string }> {
+  try {
+    const data = await callEdgeFunction('notify-saved-property-update', payload)
+    return { success: true, notified_users: data?.notified_users ?? 0 }
+  } catch (err: any) {
+    console.warn('Saved property notification trigger warning:', err?.message)
+    return { success: false, error: err?.message || 'Failed to trigger notification' }
+  }
 }
 
 export async function sendOtp(identifier: string, purpose: string = 'signup'): Promise<{ success: boolean; error: string | null; devCode?: string }> {
@@ -723,9 +741,21 @@ export async function updateListing(
     deposit_amount?: number | null
     maintenance_charge?: number | null
     available_from?: string | null
+    status?: string
   }
 ): Promise<{ error: string | null }> {
   try {
+    // 1. Fetch current existing listing to check for price drops or status updates
+    const { data: existing } = await supabase
+      .from('listings')
+      .select('price_monthly, status, title')
+      .eq('id', listingId)
+      .maybeSingle()
+
+    const oldPrice = existing?.price_monthly
+    const oldStatus = existing?.status
+    const newStatus = data.status || oldStatus || 'published'
+
     const { error } = await supabase
       .from('listings')
       .update({
@@ -745,10 +775,31 @@ export async function updateListing(
         deposit_amount: data.deposit_amount ? Number(data.deposit_amount) : null,
         maintenance_charge: data.maintenance_charge ? Number(data.maintenance_charge) : null,
         available_from: data.available_from || null,
+        ...(data.status ? { status: data.status } : {}),
       })
       .eq('id', listingId)
 
     if (error) return { error: error.message }
+
+    // 2. Trigger notification edge function if price dropped or status changed
+    if (typeof oldPrice === 'number' && data.price_monthly < oldPrice) {
+      notifySavedPropertyUpdate({
+        listing_id: listingId,
+        update_type: 'price_drop',
+        old_price: oldPrice,
+        new_price: data.price_monthly,
+        listing_title: data.title,
+      }).catch(() => {})
+    } else if (oldStatus && newStatus && oldStatus !== newStatus) {
+      notifySavedPropertyUpdate({
+        listing_id: listingId,
+        update_type: 'status_update',
+        old_status: oldStatus,
+        new_status: newStatus,
+        listing_title: data.title,
+      }).catch(() => {})
+    }
+
     return { error: null }
   } catch (err: any) {
     return { error: err.message ?? 'Failed to update listing' }
@@ -1570,5 +1621,160 @@ export async function voteReviewHelpful(reviewId: string): Promise<number> {
     return review.helpful_count
   }
   return 1
+}
+
+// ===== Viewing Schedules =====
+
+const SCHEDULES_STORAGE_KEY = 'rentiefy_viewing_schedules'
+
+function getStoredSchedules(): ViewingSchedule[] {
+  try {
+    const raw = localStorage.getItem(SCHEDULES_STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch (e) {
+    console.error('Failed to load local viewing schedules:', e)
+  }
+  return []
+}
+
+function saveStoredSchedules(schedules: ViewingSchedule[]) {
+  try {
+    localStorage.getItem(SCHEDULES_STORAGE_KEY)
+    localStorage.setItem(SCHEDULES_STORAGE_KEY, JSON.stringify(schedules))
+  } catch (e) {
+    console.error('Failed to save local viewing schedules:', e)
+  }
+}
+
+export async function createViewingSchedule(scheduleData: {
+  listing_id: string
+  listing_title: string
+  listing_address?: string
+  user_id: string
+  user_name: string
+  user_phone: string
+  user_email?: string
+  owner_id: string
+  owner_name?: string
+  preferred_date: string
+  preferred_time: string
+  notes?: string
+}): Promise<{ schedule: ViewingSchedule; error: string | null }> {
+  const newSchedule: ViewingSchedule = {
+    id: 'sch-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+    ...scheduleData,
+    status: 'pending',
+    created_at: new Date().toISOString(),
+  }
+
+  let savedSchedule = newSchedule
+  let dbSuccess = false
+
+  try {
+    const { data, error } = await supabase
+      .from('viewing_schedules')
+      .insert(newSchedule)
+      .select()
+      .single()
+
+    if (!error && data) {
+      savedSchedule = data as ViewingSchedule
+      dbSuccess = true
+    }
+  } catch (e) {
+    // fallback to local storage
+  }
+
+  if (!dbSuccess) {
+    const stored = getStoredSchedules()
+    saveStoredSchedules([newSchedule, ...stored])
+  }
+
+  // Notify Landlord via Rentiefy In-App Message
+  if (scheduleData.owner_id) {
+    const messageBody = `📅 NEW PROPERTY VIEWING REQUEST!
+Property: ${scheduleData.listing_title}
+Requested Date: ${scheduleData.preferred_date}
+Requested Time: ${scheduleData.preferred_time}
+Tenant Name: ${scheduleData.user_name}
+Tenant Phone: ${scheduleData.user_phone}
+${scheduleData.notes ? `Note from Tenant: ${scheduleData.notes}` : ''}
+
+Please reply here or call the tenant to confirm!`
+
+    try {
+      await sendMessage(scheduleData.owner_id, scheduleData.listing_id, messageBody, scheduleData.user_id)
+    } catch (e) {
+      console.warn('Failed to send in-app message to landlord:', e)
+    }
+
+    // Try sending SMS alert to landlord if owner phone is available
+    try {
+      const phone = await getOwnerPhone(scheduleData.owner_id)
+      if (phone) {
+        await sendSmsNotification(
+          phone,
+          `Rentiefy Alert: New viewing request for "${scheduleData.listing_title}" on ${scheduleData.preferred_date} at ${scheduleData.preferred_time} by ${scheduleData.user_name} (${scheduleData.user_phone}).`,
+          scheduleData.owner_id
+        )
+      }
+    } catch (e) {
+      // ignore sms failure
+    }
+  }
+
+  return { schedule: savedSchedule, error: null }
+}
+
+export async function getViewingSchedulesForUser(userId: string): Promise<ViewingSchedule[]> {
+  try {
+    const { data, error } = await supabase
+      .from('viewing_schedules')
+      .select('*')
+      .or(`user_id.eq.${userId},owner_id.eq.${userId}`)
+      .order('created_at', { ascending: false })
+
+    if (!error && data && data.length > 0) {
+      return data as ViewingSchedule[]
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const stored = getStoredSchedules()
+  return stored.filter((s) => s.user_id === userId || s.owner_id === userId)
+}
+
+export async function updateViewingScheduleStatus(
+  scheduleId: string,
+  status: ViewingStatus
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const { error } = await supabase
+      .from('viewing_schedules')
+      .update({ status })
+      .eq('id', scheduleId)
+
+    if (!error) {
+      const stored = getStoredSchedules()
+      const item = stored.find((s) => s.id === scheduleId)
+      if (item) {
+        item.status = status
+        saveStoredSchedules(stored)
+      }
+      return { success: true, error: null }
+    }
+  } catch (e) {
+    // fallback
+  }
+
+  const stored = getStoredSchedules()
+  const item = stored.find((s) => s.id === scheduleId)
+  if (item) {
+    item.status = status
+    saveStoredSchedules(stored)
+    return { success: true, error: null }
+  }
+  return { success: false, error: 'Schedule not found' }
 }
 

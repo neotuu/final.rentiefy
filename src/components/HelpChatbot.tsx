@@ -28,6 +28,7 @@ interface Message {
   content: string
   timestamp: string
   actions?: { label: string; path: string }[]
+  groundingSources?: { title: string; uri: string; reviewSnippets?: string[] }[]
 }
 
 const QUICK_SUGGESTIONS = [
@@ -119,6 +120,17 @@ export default function HelpChatbot() {
     return actions.length > 0 ? actions : undefined
   }
 
+  const getUserLocation = (): Promise<{ latitude: number; longitude: number } | null> => {
+    return new Promise((resolve) => {
+      if (!('geolocation' in navigator)) return resolve(null)
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+        () => resolve(null),
+        { timeout: 3000 }
+      )
+    })
+  }
+
   const handleSend = async (userPrompt?: string) => {
     const query = (userPrompt || input).trim()
     if (!query || isLoading) return
@@ -135,6 +147,8 @@ export default function HelpChatbot() {
     setIsLoading(true)
 
     try {
+      const userLoc = await getUserLocation()
+
       // Build conversation payload for backend API
       const conversationHistory = [...messages, userMessage].map((m) => ({
         role: m.role,
@@ -144,7 +158,10 @@ export default function HelpChatbot() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: conversationHistory })
+        body: JSON.stringify({ 
+          messages: conversationHistory,
+          location: userLoc || undefined
+        })
       })
 
       if (!response.ok) {
@@ -159,7 +176,8 @@ export default function HelpChatbot() {
         role: 'assistant',
         content: replyText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        actions: parseActionsFromResponse(replyText)
+        actions: parseActionsFromResponse(replyText),
+        groundingSources: Array.isArray(data.groundingSources) ? data.groundingSources : undefined
       }
 
       setMessages((prev) => [...prev, botMessage])
@@ -307,6 +325,30 @@ export default function HelpChatbot() {
                       }`}
                     >
                       <p className="whitespace-pre-line leading-relaxed">{msg.content}</p>
+
+                      {/* Google Maps Grounding Sources */}
+                      {msg.groundingSources && msg.groundingSources.length > 0 && (
+                        <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-2.5 text-xs">
+                          <div className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                            <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+                            <span>Google Maps Grounded Locations</span>
+                          </div>
+                          <div className="mt-1.5 flex flex-col gap-1.5">
+                            {msg.groundingSources.map((source, idx) => (
+                              <a
+                                key={`${source.uri}-${idx}`}
+                                href={source.uri}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="group flex items-center justify-between rounded-lg bg-white p-2 text-emerald-900 shadow-2xs transition hover:bg-emerald-100/70"
+                              >
+                                <span className="line-clamp-1 font-medium">{source.title}</span>
+                                <ExternalLink className="h-3 w-3 shrink-0 text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Action Chips */}
                       {msg.actions && msg.actions.length > 0 && (

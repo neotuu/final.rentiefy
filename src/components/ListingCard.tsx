@@ -1,12 +1,26 @@
 import { Link } from 'react-router-dom'
-import { MapPin, BadgeCheck, Heart, Star } from 'lucide-react'
+import { MapPin, BadgeCheck, Heart, Star, CheckSquare, Square } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useI18n } from '../lib/i18n'
 import { PROPERTY_TYPE_TRANSLATION_KEYS, GENDER_TRANSLATION_KEYS, FURNISH_TRANSLATION_KEYS } from '../lib/constants'
 import type { ListingWithDetails } from '../lib/types'
 import type { TranslationKey } from '../lib/language-types'
 
-export default function ListingCard({ listing, index = 0 }: { listing: ListingWithDetails; index?: number }) {
+interface ListingCardProps {
+  listing: ListingWithDetails
+  index?: number
+  isCompared?: boolean
+  onToggleCompare?: (listing: ListingWithDetails) => void
+  compareDisabled?: boolean
+}
+
+export default function ListingCard({
+  listing,
+  index = 0,
+  isCompared = false,
+  onToggleCompare,
+  compareDisabled = false,
+}: ListingCardProps) {
   const { t } = useI18n()
   const photo = listing.media?.[0]?.media_url ?? 'https://images.pexels.com/photos/6585627/pexels-photo-6585627.jpeg'
 
@@ -21,6 +35,33 @@ export default function ListingCard({ listing, index = 0 }: { listing: ListingWi
       <Link to={`/listing/${listing.id}`} className="group block h-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-300 hover:shadow-lg">
         <div className="relative h-48 overflow-hidden bg-gray-100">
           <img src={photo} alt={listing.title} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy" />
+          
+          {onToggleCompare && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onToggleCompare(listing)
+              }}
+              disabled={compareDisabled && !isCompared}
+              className={`absolute left-2 bottom-2 z-10 flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold backdrop-blur-md transition shadow-xs ${
+                isCompared
+                  ? 'bg-brand-600 text-white ring-1 ring-white/30'
+                  : 'bg-slate-900/70 text-white hover:bg-slate-900/90'
+              } ${compareDisabled && !isCompared ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              title={compareDisabled && !isCompared ? 'Max 3 properties selected' : 'Compare property'}
+            >
+              <input
+                type="checkbox"
+                checked={isCompared}
+                onChange={() => {}}
+                className="h-3.5 w-3.5 rounded border-white/40 text-brand-600 focus:ring-0 pointer-events-none"
+              />
+              <span>{isCompared ? 'Comparing' : 'Compare'}</span>
+            </button>
+          )}
+
           {listing.owner?.is_verified && (
             <div className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-brand-600/90 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
               <BadgeCheck className="h-3 w-3" /> {t('detail.verified')}
@@ -54,4 +95,5 @@ export default function ListingCard({ listing, index = 0 }: { listing: ListingWi
     </motion.div>
   )
 }
+
 

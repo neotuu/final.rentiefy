@@ -55,46 +55,48 @@ export function RentIcon({
         fillRule="evenodd"
         clipRule="evenodd"
         d="M250 40 
-           L425 150 
-           V235 
-           C425 300 375 325 300 325 
-           L415 440 
-           H330 
-           L230 325 
+           L430 150 
+           V250 
+           C430 320 380 360 300 360 
+           H275 
+           L380 460 
+           H305 
+           L215 360 
            H185 
-           V440 
+           V460 
            H120 
-           V200 
+           V210 
            L250 115 
-           Z
-           M185 168
-           L250 128
-           L345 185
-           V235
-           C345 270 315 280 280 280
-           H185
-           V168
+           Z 
+           M185 175 
+           L250 132 
+           L355 185 
+           V250 
+           C355 295 330 310 295 310 
+           H185 
+           V175 
            Z"
         fill={mainColor}
       />
 
-      {/* 2×2 Window Grid inside upper roof arch */}
-      <rect x="220" y="180" width="22" height="22" rx="4" fill={winColor} />
-      <rect x="250" y="180" width="22" height="22" rx="4" fill={winColor} />
-      <rect x="220" y="210" width="22" height="22" rx="4" fill={winColor} />
-      <rect x="250" y="210" width="22" height="22" rx="4" fill={winColor} />
+      {/* 2×2 Window Grid */}
+      <rect x="222" y="195" width="22" height="22" rx="4" fill={winColor} />
+      <rect x="252" y="195" width="22" height="22" rx="4" fill={winColor} />
+      <rect x="222" y="225" width="22" height="22" rx="4" fill={winColor} />
+      <rect x="252" y="225" width="22" height="22" rx="4" fill={winColor} />
 
       {/* Teal Location Pin at Bottom-Left */}
       <path
-        d="M200 270
-           C150 270 110 310 110 360
-           C110 420 200 480 200 480
-           C200 480 290 420 290 360
-           C290 310 250 270 200 270 Z"
+        d="M170 280 
+           C120 280 80 320 80 370 
+           C80 430 170 480 170 480 
+           C170 480 260 430 260 370 
+           C260 320 220 280 170 280 
+           Z"
         fill={pColor}
       />
-      {/* Location Pin Center Hole */}
-      <circle cx="200" cy="355" r="26" fill="#FFFFFF" />
+      {/* Pin Inner Circle Hole */}
+      <circle cx="170" cy="365" r="26" fill="#FFFFFF" />
     </svg>
   )
 }
